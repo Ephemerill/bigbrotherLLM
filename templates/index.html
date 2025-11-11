@@ -3,17 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemma / LLaVA Vision Server</title>
+    <title>Gemma / LLaVA / Moondream Vision Server</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #f0f0f0;
-            color: #333;
+            background-color: #1e1e1e; /* Dark background */
+            color: #d4d4d4; /* Light text */
             display: flex;
             justify-content: center;
             align-items: flex-start;
             padding: 20px;
             gap: 20px;
+            transition: background-color 0.3s ease;
         }
         .container {
             display: flex;
@@ -23,10 +24,11 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            background: #fff;
+            background: #252526; /* Darker card */
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border: 1px solid #333;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
         #video-feed {
             width: 640px;
@@ -53,61 +55,84 @@
             background-color: #dc3545;
             color: white;
         }
-        /* ✨ --- NEW: Disabled button style --- ✨ */
         #action-button:disabled {
-            background-color: #999;
+            background-color: #5a5a5a;
+            color: #999;
             cursor: not-allowed;
             opacity: 0.7;
         }
         .data-container {
             width: 400px;
-            background: #fff;
+            background: #252526; /* Darker card */
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border: 1px solid #333;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transition: background-color 0.3s ease;
         }
+        /* Updated fast mode color */
+        body.mode-fast .data-container {
+            background-color: #2a3a4a; /* Dark Blue */
+        }
+        
         .data-box {
             margin-bottom: 20px;
         }
         .data-box h2 {
-            border-bottom: 2px solid #eee;
+            border-bottom: 2px solid #444;
             padding-bottom: 5px;
             margin-top: 0;
         }
         #action-result {
             font-style: italic;
-            white-space: pre-wrap; /* Preserves newlines */
-            max-height: 200px; /* Add scroll for long actions */
+            white-space: pre-wrap;
+            max-height: 200px;
             overflow-y: auto;
-            background: #fdfdfd;
-            border: 1px solid #eee;
+            background: #1e1e1e;
+            border: 1px solid #444;
             padding: 5px;
         }
         .face-item {
             margin-bottom: 10px;
             padding-bottom: 10px;
-            border-bottom: 1px solid #f0f0f0;
+            border-bottom: 1px solid #444;
         }
         .face-item strong {
-            color: #007bff;
+            color: #4e9fff; /* Brighter blue */
         }
-        #model-selector {
-            background: #f9f9f9;
+        #model-selector, #detector-selector, #tuning-controls {
+            background: #333; /* Darker control background */
             padding: 10px;
             border-radius: 5px;
         }
-        #model-selector label {
+        #model-selector label, #detector-selector label, #tuning-controls label {
             cursor: pointer;
-            display: inline-block;
+            display: block;
             margin-bottom: 5px;
         }
-        #model-selector input[type="radio"] {
+        #model-selector input[type="radio"], #detector-selector input[type="radio"] {
             margin-right: 5px;
+        }
+        .slider-container {
+            margin-bottom: 10px;
+        }
+        .slider-container input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+        .slider-container .value-label {
+            font-weight: bold;
+            color: #4e9fff; /* Brighter blue */
+        }
+        #scale-factor-container {
+            display: none;
+        }
+        body.mode-fast #scale-factor-container {
+            display: block;
         }
     </style>
 </head>
-<body>
-    <div class="container">
+<body class="mode-accurate"> <div class="container">
         <div class="video-container">
             <img id="video-feed" src="{{ url_for('video_feed') }}" width="640" height="480">
             <button id="action-button" class="start">Analyse Action</button>
@@ -115,7 +140,35 @@
         <div class="data-container">
             
             <div class="data-box">
-                <h2>🤖 Model Selection</h2>
+                <h2>⚡ Detector Mode</h2>
+                <div id="detector-selector">
+                    <div>
+                        <input type="radio" id="detector-accurate" name="detector-select" value="accurate" checked>
+                        <label for="detector-accurate">Accurate (RetinaFace)</label>
+                    </div>
+                    <div>
+                        <input type="radio" id="detector-fast" name="detector-select" value="fast">
+                        <label for="detector-fast">Fast (HOG)</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="data-box">
+                <h2>⚙️ Performance Tuning</h2>
+                <div id="tuning-controls">
+                    <div class="slider-container">
+                        <label for="nth-frame-slider">Process Every: <span id="nth-frame-value" class="value-label">2</span> frames</label>
+                        <input type="range" id="nth-frame-slider" min="1" max="10" value="2" step="1">
+                    </div>
+                    <div class="slider-container" id="scale-factor-container">
+                        <label for="scale-slider">HOG Scale Factor: <span id="scale-value" class="value-label">0.5</span></label>
+                        <input type="range" id="scale-slider" min="0.25" max="1.0" value="0.5" step="0.05">
+                    </div>
+                </div>
+            </div>
+
+            <div class="data-box">
+                <h2>🤖 AI Model</h2>
                 <div id="model-selector">
                     <div>
                         <input type="radio" id="model-gemma" name="model-select" value="gemma3:4b" checked>
@@ -123,7 +176,11 @@
                     </div>
                     <div>
                         <input type="radio" id="model-llava" name="model-select" value="llava">
-                        <label for="model-llava">LLaVA (Fast)</label>
+                        <label for="model-llava">LLaVA (General)</label>
+                    </div>
+                    <div>
+                        <input type="radio" id="model-moondream" name="model-select" value="moondream">
+                        <label for="model-moondream">Moondream (Fastest)</label>
                     </div>
                     <div>
                         <input type="radio" id="model-off" name="model-select" value="off">
@@ -149,8 +206,18 @@
 
             const actionButton = document.getElementById('action-button');
             const actionResultDiv = document.getElementById('action-result');
-            const actionStatusDiv = document.getElementById('action-status');
             const faceDataDiv = document.getElementById('face-data');
+
+            const nthFrameSlider = document.getElementById('nth-frame-slider');
+            const nthFrameValue = document.getElementById('nth-frame-value');
+            const scaleSlider = document.getElementById('scale-slider');
+            const scaleValue = document.getElementById('scale-value');
+            const scaleContainer = document.getElementById('scale-factor-container');
+
+            let currentTuningData = {
+                nth_frame: nthFrameSlider.value,
+                hog_scale_factor: scaleSlider.value
+            };
 
             // 1. Handle Button Click
             actionButton.addEventListener('click', () => {
@@ -162,51 +229,95 @@
                     .catch(error => console.error('Error toggling action:', error));
             });
 
-            // 2. Handle Model Selection
+            // 2. Handle AI Model Selection
             document.querySelectorAll('input[name="model-select"]').forEach(radio => {
                 radio.addEventListener('change', (e) => {
                     const newModel = e.target.value;
-                    console.log('Switching model to:', newModel);
-                    
-                    // ✨ --- NEW: Disable button if model is "off" --- ✨
+                    console.log('Switching AI model to:', newModel);
                     actionButton.disabled = (newModel === 'off');
-
                     fetch('/set_model', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
+                        headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ model: newModel }),
                     })
                     .catch(error => console.error('Error setting model:', error));
                 });
             });
 
-            // 3. Poll for Data Updates
+            // 3. Handle Detector Mode Selection
+            document.querySelectorAll('input[name="detector-select"]').forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    const newDetector = e.target.value;
+                    console.log('Switching detector to:', newDetector);
+                    
+                    document.body.className = "mode-" + newDetector;
+
+                    fetch('/set_detector', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ detector: newDetector }),
+                    })
+                    .catch(error => console.error('Error setting detector:', error));
+                });
+            });
+
+            // 4. Handle Tuning Sliders
+            function sendTuningData() {
+                currentTuningData.nth_frame = nthFrameSlider.value;
+                currentTuningData.hog_scale_factor = scaleSlider.value;
+                
+                fetch('/set_tuning', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(currentTuningData),
+                })
+                .catch(error => console.error('Error setting tuning:', error));
+            }
+
+            nthFrameSlider.addEventListener('input', () => {
+                nthFrameValue.textContent = nthFrameSlider.value;
+            });
+            scaleSlider.addEventListener('input', () => {
+                scaleValue.textContent = parseFloat(scaleSlider.value).toFixed(2);
+            });
+
+            nthFrameSlider.addEventListener('change', sendTuningData);
+            scaleSlider.addEventListener('change', sendTuningData);
+
+
+            // 5. Poll for Data Updates
             setInterval(updateData, 1000);
 
             function updateData() {
                 fetch('/get_data')
                     .then(response => response.json())
                     .then(data => {
-                        // Update button text and color
                         updateButton(data.is_recording, data.keyframe_count);
 
-                        // Update action analysis result
                         actionResultDiv.textContent = data.action_result || "Waiting for analysis...";
                         actionResultDiv.scrollTop = actionResultDiv.scrollHeight;
 
-                        // Update live face data
                         updateFaceData(data.live_faces);
 
-                        // Sync radio button
+                        // Sync UI based on server state
                         const modelRadio = document.querySelector(`input[name="model-select"][value="${data.model}"]`);
-                        if (modelRadio) {
-                            modelRadio.checked = true;
-                        }
+                        if (modelRadio) modelRadio.checked = true;
 
-                        // ✨ --- NEW: Sync disabled state for button --- ✨
+                        const detectorRadio = document.querySelector(`input[name="detector-select"][value="${data.detection_mode}"]`);
+                        if (detectorRadio) detectorRadio.checked = true;
+
                         actionButton.disabled = (data.model === 'off');
+                        
+                        document.body.className = "mode-" + data.detection_mode;
+
+                        if (data.nth_frame != nthFrameSlider.value) {
+                            nthFrameSlider.value = data.nth_frame;
+                            nthFrameValue.textContent = data.nth_frame;
+                        }
+                        if (data.hog_scale_factor != scaleSlider.value) {
+                            scaleSlider.value = data.hog_scale_factor;
+                            scaleValue.textContent = parseFloat(data.hog_scale_factor).toFixed(2);
+                        }
                     })
                     .catch(error => console.error('Error fetching data:', error));
             }
@@ -227,14 +338,13 @@
                     return;
                 }
 
-                // Clear previous entries
                 faceDataDiv.innerHTML = '';
 
                 faces.forEach(face => {
                     const faceEl = document.createElement('div');
                     faceEl.className = 'face-item';
                     
-                    let analysisText = face.analysis ? face.analysis : "Waiting for analysis...";
+                    let analysisText = face.analysis ? face.analysis : "<i>(Waiting...)</i>";
                     if (face.name === 'Unknown') {
                         analysisText = "<i>(Analysis only for known faces)</i>";
                     }
