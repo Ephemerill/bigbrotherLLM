@@ -7,14 +7,13 @@
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #1e1e1e; /* Dark background */
-            color: #d4d4d4; /* Light text */
+            background-color: #1e1e1e;
+            color: #d4d4d4;
             display: flex;
             justify-content: center;
             align-items: flex-start;
             padding: 20px;
             gap: 20px;
-            transition: background-color 0.3s ease;
         }
         .container {
             display: flex;
@@ -24,7 +23,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            background: #252526; /* Darker card */
+            background: #252526;
             padding: 20px;
             border-radius: 8px;
             border: 1px solid #333;
@@ -47,14 +46,8 @@
             cursor: pointer;
             transition: background-color 0.2s ease, opacity 0.2s ease;
         }
-        #action-button.start {
-            background-color: #28a745;
-            color: white;
-        }
-        #action-button.stop {
-            background-color: #dc3545;
-            color: white;
-        }
+        #action-button.start { background-color: #28a745; color: white; }
+        #action-button.stop { background-color: #dc3545; color: white; }
         #action-button:disabled {
             background-color: #5a5a5a;
             color: #999;
@@ -63,18 +56,12 @@
         }
         .data-container {
             width: 400px;
-            background: #252526; /* Darker card */
+            background: #252526;
             padding: 20px;
             border-radius: 8px;
             border: 1px solid #333;
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            transition: background-color 0.3s ease;
         }
-        /* Updated fast mode color */
-        body.mode-fast .data-container {
-            background-color: #2a3a4a; /* Dark Blue */
-        }
-        
         .data-box {
             margin-bottom: 20px;
         }
@@ -97,42 +84,27 @@
             padding-bottom: 10px;
             border-bottom: 1px solid #444;
         }
-        .face-item strong {
-            color: #4e9fff; /* Brighter blue */
-        }
-        #model-selector, #detector-selector, #tuning-controls {
-            background: #333; /* Darker control background */
+        .face-item strong { color: #4e9fff; }
+        #model-selector, #yolo-tuning-controls { /* ✨ Updated */
+            background: #333;
             padding: 10px;
             border-radius: 5px;
         }
-        #model-selector label, #detector-selector label, #tuning-controls label {
+        #model-selector label, #yolo-tuning-controls label { /* ✨ Updated */
             cursor: pointer;
             display: block;
             margin-bottom: 5px;
         }
-        #model-selector input[type="radio"], #detector-selector input[type="radio"] {
+        #model-selector input[type="radio"] {
             margin-right: 5px;
         }
-        .slider-container {
-            margin-bottom: 10px;
-        }
-        .slider-container input[type="range"] {
-            width: 100%;
-            cursor: pointer;
-        }
-        .slider-container .value-label {
-            font-weight: bold;
-            color: #4e9fff; /* Brighter blue */
-        }
-        #scale-factor-container {
-            display: none;
-        }
-        body.mode-fast #scale-factor-container {
-            display: block;
-        }
+        .slider-container { margin-bottom: 10px; }
+        .slider-container input[type="range"] { width: 100%; cursor: pointer; }
+        .slider-container .value-label { font-weight: bold; color: #4e9fff; }
     </style>
 </head>
-<body class="mode-accurate"> <div class="container">
+<body>
+    <div class="container">
         <div class="video-container">
             <img id="video-feed" src="{{ url_for('video_feed') }}" width="640" height="480">
             <button id="action-button" class="start">Analyse Action</button>
@@ -140,29 +112,30 @@
         <div class="data-container">
             
             <div class="data-box">
-                <h2>⚡ Detector Mode</h2>
-                <div id="detector-selector">
+                <h2>⚡ YOLO Performance</h2>
+                <div id="yolo-tuning-controls">
                     <div>
-                        <input type="radio" id="detector-accurate" name="detector-select" value="accurate" checked>
-                        <label for="detector-accurate">Accurate (RetinaFace)</label>
+                        <input type="radio" id="yolo-n" name="yolo-model" value="n" checked>
+                        <label for="yolo-n">Nano (Fastest)</label>
                     </div>
                     <div>
-                        <input type="radio" id="detector-fast" name="detector-select" value="fast">
-                        <label for="detector-fast">Fast (HOG)</label>
+                        <input type="radio" id="yolo-s" name="yolo-model" value="s">
+                        <label for="yolo-s">Small (Balanced)</label>
                     </div>
-                </div>
-            </div>
-
-            <div class="data-box">
-                <h2>⚙️ Performance Tuning</h2>
-                <div id="tuning-controls">
+                    <div>
+                        <input type="radio" id="yolo-m" name="yolo-model" value="m">
+                        <label for="yolo-m">Medium (Accurate)</label>
+                    </div>
+                    <hr style="border-color: #444; margin: 10px 0;">
+                    
                     <div class="slider-container">
-                        <label for="nth-frame-slider">Process Every: <span id="nth-frame-value" class="value-label">2</span> frames</label>
-                        <input type="range" id="nth-frame-slider" min="1" max="10" value="2" step="1">
+                        <label for="yolo-conf-slider">Confidence: <span id="yolo-conf-value" class="value-label">40%</span></label>
+                        <input type="range" id="yolo-conf-slider" min="0.15" max="0.85" value="0.4" step="0.05">
                     </div>
-                    <div class="slider-container" id="scale-factor-container">
-                        <label for="scale-slider">HOG Scale Factor: <span id="scale-value" class="value-label">0.5</span></label>
-                        <input type="range" id="scale-slider" min="0.25" max="1.0" value="0.5" step="0.05">
+
+                    <div class="slider-container">
+                        <label for="yolo-imgsz-slider">Image Size: <span id="yolo-imgsz-value" class="value-label">640px</span></label>
+                        <input type="range" id="yolo-imgsz-slider" min="320" max="640" value="640" step="32">
                     </div>
                 </div>
             </div>
@@ -191,12 +164,11 @@
 
             <div class="data-box">
                 <h2>🔳 Action Analysis</h2>
-                <div id="action-status"></div>
                 <div id="action-result">Waiting for analysis...</div>
             </div>
             <div class="data-box">
-                <h2>👤 Live Face Analysis</h2>
-                <div id="face-data">No faces detected.</div>
+                <h2>👤 Live Person Analysis</h2>
+                <div id="face-data">No persons detected.</div>
             </div>
         </div>
     </div>
@@ -208,16 +180,12 @@
             const actionResultDiv = document.getElementById('action-result');
             const faceDataDiv = document.getElementById('face-data');
 
-            const nthFrameSlider = document.getElementById('nth-frame-slider');
-            const nthFrameValue = document.getElementById('nth-frame-value');
-            const scaleSlider = document.getElementById('scale-slider');
-            const scaleValue = document.getElementById('scale-value');
-            const scaleContainer = document.getElementById('scale-factor-container');
-
-            let currentTuningData = {
-                nth_frame: nthFrameSlider.value,
-                hog_scale_factor: scaleSlider.value
-            };
+            // ✨ --- NEW: YOLO Control Elements --- ✨
+            const yoloModelRadios = document.querySelectorAll('input[name="yolo-model"]');
+            const yoloConfSlider = document.getElementById('yolo-conf-slider');
+            const yoloConfValue = document.getElementById('yolo-conf-value');
+            const yoloImgszSlider = document.getElementById('yolo-imgsz-slider');
+            const yoloImgszValue = document.getElementById('yolo-imgsz-value');
 
             // 1. Handle Button Click
             actionButton.addEventListener('click', () => {
@@ -244,79 +212,75 @@
                 });
             });
 
-            // 3. Handle Detector Mode Selection
-            document.querySelectorAll('input[name="detector-select"]').forEach(radio => {
-                radio.addEventListener('change', (e) => {
-                    const newDetector = e.target.value;
-                    console.log('Switching detector to:', newDetector);
-                    
-                    document.body.className = "mode-" + newDetector;
+            // 3. ✨ --- NEW: Handle YOLO Tuning --- ✨
+            function sendYoloSettings() {
+                const modelKey = document.querySelector('input[name="yolo-model"]:checked').value;
+                const conf = yoloConfSlider.value;
+                const imgsz = yoloImgszSlider.value;
 
-                    fetch('/set_detector', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ detector: newDetector }),
-                    })
-                    .catch(error => console.error('Error setting detector:', error));
-                });
-            });
-
-            // 4. Handle Tuning Sliders
-            function sendTuningData() {
-                currentTuningData.nth_frame = nthFrameSlider.value;
-                currentTuningData.hog_scale_factor = scaleSlider.value;
+                console.log(`Sending YOLO settings: ${modelKey}, ${conf}, ${imgsz}`);
                 
-                fetch('/set_tuning', {
+                fetch('/set_yolo_settings', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(currentTuningData),
+                    body: JSON.stringify({
+                        yolo_model_key: modelKey,
+                        yolo_conf: conf,
+                        yolo_imgsz: imgsz
+                    }),
                 })
-                .catch(error => console.error('Error setting tuning:', error));
+                .catch(error => console.error('Error setting YOLO settings:', error));
             }
 
-            nthFrameSlider.addEventListener('input', () => {
-                nthFrameValue.textContent = nthFrameSlider.value;
+            // Add listeners for all YOLO controls
+            yoloModelRadios.forEach(radio => radio.addEventListener('change', sendYoloSettings));
+            yoloConfSlider.addEventListener('change', sendYoloSettings); // On release
+            yoloImgszSlider.addEventListener('change', sendYoloSettings); // On release
+
+            // Update labels on input
+            yoloConfSlider.addEventListener('input', () => {
+                yoloConfValue.textContent = `${Math.round(yoloConfSlider.value * 100)}%`;
             });
-            scaleSlider.addEventListener('input', () => {
-                scaleValue.textContent = parseFloat(scaleSlider.value).toFixed(2);
+            yoloImgszSlider.addEventListener('input', () => {
+                yoloImgszValue.textContent = `${yoloImgszSlider.value}px`;
             });
 
-            nthFrameSlider.addEventListener('change', sendTuningData);
-            scaleSlider.addEventListener('change', sendTuningData);
 
-
-            // 5. Poll for Data Updates
+            // 4. Poll for Data Updates
             setInterval(updateData, 1000);
 
             function updateData() {
                 fetch('/get_data')
                     .then(response => response.json())
                     .then(data => {
+                        // Update button text and color
                         updateButton(data.is_recording, data.keyframe_count);
 
+                        // Update action analysis result
                         actionResultDiv.textContent = data.action_result || "Waiting for analysis...";
                         actionResultDiv.scrollTop = actionResultDiv.scrollHeight;
 
+                        // Update live face data
                         updateFaceData(data.live_faces);
 
-                        // Sync UI based on server state
+                        // --- Sync UI based on server state ---
+                        
                         const modelRadio = document.querySelector(`input[name="model-select"][value="${data.model}"]`);
                         if (modelRadio) modelRadio.checked = true;
 
-                        const detectorRadio = document.querySelector(`input[name="detector-select"][value="${data.detection_mode}"]`);
-                        if (detectorRadio) detectorRadio.checked = true;
-
                         actionButton.disabled = (data.model === 'off');
                         
-                        document.body.className = "mode-" + data.detection_mode;
+                        // ✨ --- NEW: Sync YOLO controls --- ✨
+                        const yoloModelRadio = document.querySelector(`input[name="yolo-model"][value="${data.yolo_model_key}"]`);
+                        if (yoloModelRadio) yoloModelRadio.checked = true;
 
-                        if (data.nth_frame != nthFrameSlider.value) {
-                            nthFrameSlider.value = data.nth_frame;
-                            nthFrameValue.textContent = data.nth_frame;
+                        if (data.yolo_conf != yoloConfSlider.value) {
+                            yoloConfSlider.value = data.yolo_conf;
+                            yoloConfValue.textContent = `${Math.round(data.yolo_conf * 100)}%`;
                         }
-                        if (data.hog_scale_factor != scaleSlider.value) {
-                            scaleSlider.value = data.hog_scale_factor;
-                            scaleValue.textContent = parseFloat(data.hog_scale_factor).toFixed(2);
+                        if (data.yolo_imgsz != yoloImgszSlider.value) {
+                            yoloImgszSlider.value = data.yolo_imgsz;
+                            yoloImgszValue.textContent = `${data.yolo_imgsz}px`;
                         }
                     })
                     .catch(error => console.error('Error fetching data:', error));
@@ -334,7 +298,7 @@
 
             function updateFaceData(faces) {
                 if (!faces || faces.length === 0) {
-                    faceDataDiv.textContent = 'No faces detected.';
+                    faceDataDiv.textContent = 'No persons detected.';
                     return;
                 }
 
@@ -345,12 +309,12 @@
                     faceEl.className = 'face-item';
                     
                     let analysisText = face.analysis ? face.analysis : "<i>(Waiting...)</i>";
-                    if (face.name === 'Unknown') {
-                        analysisText = "<i>(Analysis only for known faces)</i>";
+                    if (face.name === 'Person') {
+                        analysisText = "<i>(Awaiting identification)</i>";
                     }
 
                     faceEl.innerHTML = `
-                        <strong>${face.name} (${face.confidence}%)</strong>
+                        <strong>${face.name} ${face.confidence > 0 ? `(${face.confidence}%)` : ''}</strong>
                         <div>${analysisText}</div>
                     `;
                     faceDataDiv.appendChild(faceEl);
