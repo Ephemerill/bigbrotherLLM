@@ -16,16 +16,16 @@ KNOWN_FACES_DIR = "known_faces" # Folder containing subfolders (e.g., 'Gabriel',
 ANALYSIS_COOLDOWN = 10       # Seconds before re-analyzing the same person
 
 # --- Tuning Variables ---
-PROCESS_SCALE_FACTOR = 0.5
-PROCESS_EVERY_NTH_FRAME = 2
+PROCESS_SCALE_FACTOR = 1
+PROCESS_EVERY_NTH_FRAME = 5
 
 # --- Drawing Variables ---
 BOX_PADDING = 15
 CONFIDENCE_THRESHOLD = 0.6
 
 # --- ✨ New Action Analysis Variables ✨ ---
-# Capture every 5th frame for the action sequence
-ACTION_FRAME_CAPTURE_RATE = 5
+# Capture every nth frame for the action sequence
+ACTION_FRAME_CAPTURE_RATE = 10
 # Define the button's position and size (x, y, width, height)
 BUTTON_RECT = (10, FRAME_HEIGHT - 50, 200, 40)
 # The window name MUST be a constant to register the mouse callback
@@ -229,7 +229,7 @@ def main():
             small_frame = cv2.resize(frame, (0, 0), fx=PROCESS_SCALE_FACTOR, fy=PROCESS_SCALE_FACTOR)
             rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
             
-            face_locations = face_recognition.face_locations(rgb_small_frame)
+            face_locations = face_recognition.face_locations(rgb_small_frame, model='cnn')
             face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
 
             current_face_data = [] 
