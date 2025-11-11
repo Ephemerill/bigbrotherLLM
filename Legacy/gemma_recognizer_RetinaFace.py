@@ -6,7 +6,7 @@ import ollama
 import base64
 import threading
 import time
-from retinaface import RetinaFace # ✨ --- NEW IMPORT --- ✨
+from retinaface import RetinaFace # Using RetinaFace
 
 # --- Configuration ---
 MODEL = 'gemma3:4b'          # The Ollama model to use for analysis
@@ -17,29 +17,31 @@ KNOWN_FACES_DIR = "known_faces" # Folder containing subfolders (e.g., 'Gabriel',
 ANALYSIS_COOLDOWN = 10       # Seconds before re-analyzing the same person
 
 # --- Tuning Variables ---
-# How many frames to skip between processing.
-# 1 = Process every frame (slow, max accuracy)
-# 2 = Process every other frame (good balance)
-PROCESS_EVERY_NTH_FRAME = 2
+PROCESS_EVERY_NTH_FRAME = 10
 
 # --- Drawing Variables ---
 BOX_PADDING = 15
-CONFIDENCE_THRESHOLD = 0.6   # Max face distance for a face to be considered a match
-# This is the confidence for the *detector*. 0.9 = 90% sure it's a face.
+CONFIDENCE_THRESHOLD = 0.6
 DETECTOR_CONFIDENCE = 0.9
 
 # --- Action Analysis Variables ---
-ACTION_FRAME_CAPTURE_RATE = 5
 BUTTON_RECT = (10, FRAME_HEIGHT - 50, 200, 40)
 WINDOW_NAME = 'Gemma 3 Facial Recognition (RetinaFace)'
+
+# --- ✨ --- NEW KEYFRAME LOGIC --- ✨ ---
+# This is the "motion" threshold.
+# Higher = less sensitive (less frames). Lower = more sensitive (more frames).
+# 30 is a good starting point.
+ACTION_MOTION_THRESHOLD = 30
 # ---------------------
 
 # --- Global Dictionaries & State ---
 analysis_results = {}
 last_analysis_time = {}
 is_analyzing_action = False
-action_frames = []
+action_frames = []           # List to store base64 *keyframes*
 action_analysis_result = ""
+last_action_frame_gray = None # Stores the last saved frame for motion comparison
 # ---------------------------
 
 def frame_to_base64(frame):
@@ -51,7 +53,7 @@ def frame_to_base64(frame):
 
 def analyze_action_sequence(frames_list):
     """
-    (Unchanged) Function to run in a separate thread for complex action analysis.
+    (Unchanged) Sends a *sequence* of keyframes to Gemma for complex action analysis.
     """
     global action_analysis_result
     
@@ -59,13 +61,12 @@ def analyze_action_sequence(frames_list):
         action_analysis_result = "Error: No frames captured for action."
         return
 
-    action_analysis_result = f"Analyzing {len(frames_list)} frames..."
-    print(f"\n[Action Analysis] Sending {len(frames_list)} frames to Gemma 3...")
+    action_analysis_result = f"Analyzing {len(frames_list)} keyframes..."
+    print(f"\n[Action Analysis] Sending {len(frames_list)} keyframes to Gemma 3...")
 
     prompt = (
-        "This is a sequence of video frames captured in order. "
-        "Analyze the entire sequence and describe the complex action or event that occurred. "
-        "What is the person or people doing from start to finish?"
+        "This is a sequence of keyframes, captured only when motion occurred. "
+        "Analyze this 'storyboard' and describe the complex action or event that occurred from start to finish."
     )
 
     try:
@@ -88,8 +89,8 @@ def analyze_action_sequence(frames_list):
         action_analysis_result = "Error: Ollama connection failed."
 
 def mouse_callback(event, x, y, flags, param):
-    """(Unchanged) Handles mouse clicks to toggle the action analysis."""
-    global is_analyzing_action, action_frames, action_analysis_result
+    """Handles mouse clicks to toggle the action analysis."""
+    global is_analyzing_action, action_frames, action_analysis_result, last_action_frame_gray
 
     if event == cv2.EVENT_LBUTTONDOWN:
         bx, by, bw, bh = BUTTON_RECT
@@ -97,11 +98,15 @@ def mouse_callback(event, x, y, flags, param):
             is_analyzing_action = not is_analyzing_action
             
             if is_analyzing_action:
-                print("[Action Analysis] Started recording frames.")
-                action_frames = []
-                action_analysis_result = ""
+                # --- STARTING ---
+                print("[Action Analysis] Started recording keyframes.")
+                action_frames = []  # Clear previous frames
+                action_analysis_result = "" # Clear previous result
+                # We will set last_action_frame_gray in the main loop
+                last_action_frame_gray = None 
             else:
-                print(f"[Action Analysis] Stopped recording. Captured {len(action_frames)} frames.")
+                # --- STOPPING ---
+                print(f"[Action Analysis] Stopped recording. Captured {len(action_frames)} keyframes.")
                 if len(action_frames) > 0:
                     analysis_thread = threading.Thread(
                         target=analyze_action_sequence,
@@ -120,9 +125,7 @@ def analyze_frame_with_gemma(frame, name):
     if b64_image is None:
         analysis_results[name] = "Error: Failed to encode frame."
         return
-
     prompt = f"This person has been identified as {name}. Briefly describe what they are doing."
-
     try:
         response = ollama.chat(model=MODEL, messages=[{'role': 'user', 'content': prompt, 'images': [b64_image]}], stream=False)
         analysis_text = response['message']['content']
@@ -168,13 +171,13 @@ def load_known_faces(known_faces_dir):
     return known_face_encodings, known_face_names
 
 def main():
-    # 1. Load known faces (unchanged)
+    # 1. Load known faces
     known_face_encodings, known_face_names = load_known_faces(KNOWN_FACES_DIR)
     
     if not known_face_encodings:
         print("No known faces loaded. The program will only identify 'Unknown' persons.")
 
-    # 2. Open webcam (unchanged)
+    # 2. Open webcam
     cap = cv2.VideoCapture(WEBCAM_INDEX)
     if not cap.isOpened():
         print(f"Error: Could not open webcam at index {WEBCAM_INDEX}.")
@@ -201,91 +204,91 @@ def main():
         frame = cv2.flip(frame, 1)
         frame_count += 1
         
-        if is_analyzing_action and (frame_count % ACTION_FRAME_CAPTURE_RATE == 0):
-            b64_frame = frame_to_base64(frame)
-            if b64_frame:
-                action_frames.append(b64_frame)
+        # --- ✨ --- NEW KEYFRAME LOGIC --- ✨ ---
+        # We do this every frame, regardless of other processing
+        if is_analyzing_action:
+            # Create a small, blurred, grayscale frame for motion detection
+            # This is *much* faster than comparing full-res, color frames
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            gray = cv2.GaussianBlur(gray, (21, 21), 0)
+            
+            if last_action_frame_gray is None:
+                # This is the first frame of the recording
+                last_action_frame_gray = gray
+                b64_frame = frame_to_base64(frame)
+                if b64_frame:
+                    action_frames.append(b64_frame)
+                    print(f"[Action Analysis] Saved Keyframe 1 (Start)")
+            else:
+                # Compare the current frame to the last *saved* frame
+                frame_delta = cv2.absdiff(last_action_frame_gray, gray)
+                thresh = cv2.threshold(frame_delta, ACTION_MOTION_THRESHOLD, 255, cv2.THRESH_BINARY)[1]
+                
+                # If there's significant motion (more than 0 non-zero pixels)
+                if thresh.sum() > 0:
+                    # Save the *full color* frame
+                    b64_frame = frame_to_base64(frame)
+                    if b64_frame:
+                        action_frames.append(b64_frame)
+                        print(f"[Action Analysis] Saved Keyframe {len(action_frames)} (Motion Detected)")
+                    # Update the comparison frame to this new keyframe
+                    last_action_frame_gray = gray
+        # --- ✨ --- END OF KEYFRAME LOGIC --- ✨ ---
 
-        # --- ✨ --- NEW DETECTION LOGIC --- ✨ ---
+        # --- Face Recognition Logic (RetinaFace) ---
         if frame_count % PROCESS_EVERY_NTH_FRAME == 0:
             
-            # 1. DETECT faces with RetinaFace (uses BGR frame)
-            # We pass threshold=0.0 so it finds all potential faces
-            # We will filter by confidence later.
             try:
-                # RetinaFace expects BGR, so 'frame' is perfect
                 faces = RetinaFace.detect_faces(frame, threshold=DETECTOR_CONFIDENCE)
             except Exception as e:
-                # Catch errors if RetinaFace fails (e.g., on a bad frame)
                 print(f"RetinaFace error: {e}")
                 faces = {}
 
             face_locations = []
             face_encodings = []
             
-            # RetinaFace returns a dict if faces are found
             if isinstance(faces, dict):
-                
-                # Build list of boxes in (top, right, bottom, left) format
-                # RetinaFace returns [x1, y1, x2, y2]
                 boxes_trbl = []
                 for face_key, face_data in faces.items():
                     x1, y1, x2, y2 = face_data['facial_area']
-                    # Convert [x1, y1, x2, y2] to [top, right, bottom, left]
-                    # Note: int() is important
                     top, right, bottom, left = int(y1), int(x2), int(y2), int(x1)
                     boxes_trbl.append((top, right, bottom, left))
                 
                 if boxes_trbl:
-                    # 2. ENCODE faces with face_recognition
-                    # We need an RGB frame *only* for this step
                     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    face_locations = boxes_trbl # Store for drawing
-                    # Get dlib embeddings for the boxes found by RetinaFace
+                    face_locations = boxes_trbl
                     face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
-
-            # --- ✨ --- END OF NEW LOGIC --- ✨ ---
             
-            # --- This logic is now fed by RetinaFace, but is otherwise unchanged ---
             current_face_data = [] 
             for face_location, face_encoding in zip(face_locations, face_encodings):
                 name = "Unknown"
                 confidence = 0
-
                 face_distances = face_recognition.face_distance(known_face_encodings, face_encoding)
                 
                 if len(face_distances) > 0:
                     best_match_index = np.argmin(face_distances)
                     min_distance = face_distances[best_match_index]
-
                     if min_distance < CONFIDENCE_THRESHOLD:
                         name = known_face_names[best_match_index]
                         confidence = max(0, min(100, (1.0 - min_distance) * 100))
                     else:
-                        # Show recognition confidence even if unknown
                         confidence = max(0, min(100, (1.0 - min_distance) * 100))
-                
                 current_face_data.append((face_location, name, confidence))
 
-            # --- Hybrid Logic (Trigger Single-Frame Analysis - unchanged) ---
+            # --- Hybrid Logic (Trigger Single-Frame Analysis) ---
             current_time = time.time()
             for face_location, name, confidence in current_face_data:
                 if name == "Unknown": continue 
-                
                 last_seen = last_analysis_time.get(name, 0)
                 if (current_time - last_seen) > ANALYSIS_COOLDOWN:
                     last_analysis_time[name] = current_time
                     analysis_results[name] = "Analyzing..."
-                    
-                    print(f"\nTriggering Gemma 3 analysis for {name}...")
                     analysis_thread = threading.Thread(target=analyze_frame_with_gemma, args=(frame.copy(), name), daemon=True)
                     analysis_thread.start()
 
         # --- Drawing Logic (runs every frame) ---
         for face_location, name, confidence in current_face_data:
-            # Boxes are already full-res, just add padding
             top, right, bottom, left = face_location
-            
             top = top - BOX_PADDING
             right = right + BOX_PADDING
             bottom = bottom + BOX_PADDING
@@ -296,12 +299,10 @@ def main():
 
             label_text = f"{name} ({int(confidence)}%)"
             (text_width, text_height), baseline = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
-            
             label_top = max(top - text_height - baseline - 10, 0)
             label_bottom = max(top - 10, text_height + baseline)
             label_left = left
             label_right = left + text_width + 10
-
             cv2.rectangle(frame, (label_left, label_top), (label_right, label_bottom), color, cv2.FILLED)
             cv2.putText(frame, label_text, (left + 5, top - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
             
@@ -317,13 +318,13 @@ def main():
                     cv2.putText(frame, line, (left, y), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), 2)
                     y_offset += line_height
 
-        # --- Button and Action Result Drawing Logic (unchanged) ---
+        # --- Button and Action Result Drawing Logic ---
         bx, by, bw, bh = BUTTON_RECT
         if is_analyzing_action:
             cv2.rectangle(frame, (bx, by), (bx + bw, by + bh), (0, 0, 255), cv2.FILLED)
             cv2.putText(frame, "STOP Recording", (bx + 10, by + 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            rec_text = f"REC {len(action_frames)}"
-            cv2.putText(frame, rec_text, (bx + bw + 10, by + 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            rec_text = f"REC (Keyframes: {len(action_frames)})" # Now shows keyframe count
+            cv2.putText(frame, rec_text, (bx + bw + 10, by + 28), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
         else:
             cv2.rectangle(frame, (bx, by), (bx + bw, by + bh), (0, 180, 0), cv2.FILLED)
             cv2.putText(frame, "Analyse Action", (bx + 10, by + 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemma / LLaVA Vision Server</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f0f0;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 20px;
+            gap: 20px;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+        .video-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        #video-feed {
+            width: 640px;
+            height: 480px;
+            border-radius: 4px;
+            background-color: #000;
+        }
+        #action-button {
+            width: 100%;
+            padding: 15px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 4px;
+            margin-top: 20px;
+            cursor: pointer;
+            transition: background-color 0.2s ease, opacity 0.2s ease;
+        }
+        #action-button.start {
+            background-color: #28a745;
+            color: white;
+        }
+        #action-button.stop {
+            background-color: #dc3545;
+            color: white;
+        }
+        /* ✨ --- NEW: Disabled button style --- ✨ */
+        #action-button:disabled {
+            background-color: #999;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        .data-container {
+            width: 400px;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .data-box {
+            margin-bottom: 20px;
+        }
+        .data-box h2 {
+            border-bottom: 2px solid #eee;
+            padding-bottom: 5px;
+            margin-top: 0;
+        }
+        #action-result {
+            font-style: italic;
+            white-space: pre-wrap; /* Preserves newlines */
+            max-height: 200px; /* Add scroll for long actions */
+            overflow-y: auto;
+            background: #fdfdfd;
+            border: 1px solid #eee;
+            padding: 5px;
+        }
+        .face-item {
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .face-item strong {
+            color: #007bff;
+        }
+        #model-selector {
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #model-selector label {
+            cursor: pointer;
+            display: inline-block;
+            margin-bottom: 5px;
+        }
+        #model-selector input[type="radio"] {
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="video-container">
+            <img id="video-feed" src="{{ url_for('video_feed') }}" width="640" height="480">
+            <button id="action-button" class="start">Analyse Action</button>
+        </div>
+        <div class="data-container">
+            
+            <div class="data-box">
+                <h2>🤖 Model Selection</h2>
+                <div id="model-selector">
+                    <div>
+                        <input type="radio" id="model-gemma" name="model-select" value="gemma3:4b" checked>
+                        <label for="model-gemma">Gemma 3 (Balanced)</label>
+                    </div>
+                    <div>
+                        <input type="radio" id="model-llava" name="model-select" value="llava">
+                        <label for="model-llava">LLaVA (Fast)</label>
+                    </div>
+                    <div>
+                        <input type="radio" id="model-off" name="model-select" value="off">
+                        <label for="model-off">Off (Detection Only)</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="data-box">
+                <h2>🔳 Action Analysis</h2>
+                <div id="action-status"></div>
+                <div id="action-result">Waiting for analysis...</div>
+            </div>
+            <div class="data-box">
+                <h2>👤 Live Face Analysis</h2>
+                <div id="face-data">No faces detected.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            const actionButton = document.getElementById('action-button');
+            const actionResultDiv = document.getElementById('action-result');
+            const actionStatusDiv = document.getElementById('action-status');
+            const faceDataDiv = document.getElementById('face-data');
+
+            // 1. Handle Button Click
+            actionButton.addEventListener('click', () => {
+                fetch('/toggle_action', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        updateButton(data.is_recording, 0);
+                    })
+                    .catch(error => console.error('Error toggling action:', error));
+            });
+
+            // 2. Handle Model Selection
+            document.querySelectorAll('input[name="model-select"]').forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    const newModel = e.target.value;
+                    console.log('Switching model to:', newModel);
+                    
+                    // ✨ --- NEW: Disable button if model is "off" --- ✨
+                    actionButton.disabled = (newModel === 'off');
+
+                    fetch('/set_model', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ model: newModel }),
+                    })
+                    .catch(error => console.error('Error setting model:', error));
+                });
+            });
+
+            // 3. Poll for Data Updates
+            setInterval(updateData, 1000);
+
+            function updateData() {
+                fetch('/get_data')
+                    .then(response => response.json())
+                    .then(data => {
+                        // Update button text and color
+                        updateButton(data.is_recording, data.keyframe_count);
+
+                        // Update action analysis result
+                        actionResultDiv.textContent = data.action_result || "Waiting for analysis...";
+                        actionResultDiv.scrollTop = actionResultDiv.scrollHeight;
+
+                        // Update live face data
+                        updateFaceData(data.live_faces);
+
+                        // Sync radio button
+                        const modelRadio = document.querySelector(`input[name="model-select"][value="${data.model}"]`);
+                        if (modelRadio) {
+                            modelRadio.checked = true;
+                        }
+
+                        // ✨ --- NEW: Sync disabled state for button --- ✨
+                        actionButton.disabled = (data.model === 'off');
+                    })
+                    .catch(error => console.error('Error fetching data:', error));
+            }
+
+            function updateButton(isRecording, keyframe_count) {
+                if (isRecording) {
+                    actionButton.textContent = `STOP Recording (Keyframes: ${keyframe_count})`;
+                    actionButton.className = 'stop';
+                } else {
+                    actionButton.textContent = 'Analyse Action';
+                    actionButton.className = 'start';
+                }
+            }
+
+            function updateFaceData(faces) {
+                if (!faces || faces.length === 0) {
+                    faceDataDiv.textContent = 'No faces detected.';
+                    return;
+                }
+
+                // Clear previous entries
+                faceDataDiv.innerHTML = '';
+
+                faces.forEach(face => {
+                    const faceEl = document.createElement('div');
+                    faceEl.className = 'face-item';
+                    
+                    let analysisText = face.analysis ? face.analysis : "Waiting for analysis...";
+                    if (face.name === 'Unknown') {
+                        analysisText = "<i>(Analysis only for known faces)</i>";
+                    }
+
+                    faceEl.innerHTML = `
+                        <strong>${face.name} (${face.confidence}%)</strong>
+                        <div>${analysisText}</div>
+                    `;
+                    faceDataDiv.appendChild(faceEl);
+                });
+            }
+
+            // Initial call to get data right away
+            updateData();
+        });
+    </script>
+</body>
+</html>
