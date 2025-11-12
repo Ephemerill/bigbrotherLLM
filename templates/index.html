@@ -85,12 +85,12 @@
             border-bottom: 1px solid #444;
         }
         .face-item strong { color: #4e9fff; }
-        #model-selector, #yolo-tuning-controls, #face-detector-controls { 
+        #model-selector, #yolo-tuning-controls, #face-detector-controls, #recognition-tuning-controls { /* ✨ Updated */
             background: #333;
             padding: 10px;
             border-radius: 5px;
         }
-        #model-selector label, #yolo-tuning-controls label, #face-detector-controls label {
+        #model-selector label, #yolo-tuning-controls label, #face-detector-controls label, #recognition-tuning-controls label { /* ✨ Updated */
             cursor: pointer;
             display: block;
             margin-bottom: 5px;
@@ -102,8 +102,8 @@
         .slider-container input[type="range"] { width: 100%; cursor: pointer; }
         .slider-container .value-label { font-weight: bold; color: #4e9fff; }
         
-        #retinaface-conf-container { display: none; } 
-        body.face-detector-accurate #retinaface-conf-container { display: block; } 
+        #retinaface-conf-container { display: none; } /* ✨ Renamed */
+        body.face-detector-accurate #retinaface-conf-container { display: block; } /* ✨ Renamed */
 
     </style>
 </head>
@@ -142,7 +142,7 @@
             </div>
 
             <div class="data-box">
-                <h2>👤 Face Recognition (DeepFace)</h2>
+                <h2>👤 Face Recognition</h2>
                 <div id="face-detector-controls">
                     <div>
                         <input type="radio" id="face-detector-accurate" name="face-detector-select" value="accurate" checked>
@@ -156,9 +156,9 @@
                     <hr style="border-color: #444; margin: 10px 0;">
 
                     <div class="slider-container" id="recognition-threshold-container">
-                        <label for="recognition-threshold-slider">Recognition Threshold: <span id="recognition-threshold-value" class="value-label">0.40</span></label>
+                        <label for="recognition-threshold-slider">Recognition Threshold: <span id="recognition-threshold-value" class="value-label">0.60</span></label>
                         <small>(Lower = Stricter, Fewer Mismatches)</small>
-                        <input type="range" id="recognition-threshold-slider" min="0.25" max="0.6" value="0.4" step="0.01" style="margin-top: 5px;">
+                        <input type="range" id="recognition-threshold-slider" min="0.4" max="0.7" value="0.6" step="0.01" style="margin-top: 5px;">
                     </div>
                     
                     <div class="slider-container" id="retinaface-conf-container">
@@ -400,14 +400,8 @@
                         analysisText = "<i>(Awaiting identification)</i>";
                     }
 
-                    // ✨ --- FIXED: Show confidence again --- ✨
-                    let confidenceText = face.confidence > 0 ? ` (${Math.round(face.confidence)}%)` : '';
-                    if (face.name === 'Person') {
-                        confidenceText = ''; // Don't show confidence for "Person"
-                    }
-
                     faceEl.innerHTML = `
-                        <strong>${face.name}${confidenceText}</strong>
+                        <strong>${face.name} ${face.confidence > 0 ? `(${face.confidence}%)` : ''}</strong>
                         <div>${analysisText}</div>
                     `;
                     faceDataDiv.appendChild(faceEl);
