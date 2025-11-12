@@ -85,26 +85,29 @@
             border-bottom: 1px solid #444;
         }
         .face-item strong { color: #4e9fff; }
-        #model-selector, #yolo-tuning-controls { /* ✨ Updated */
+        #model-selector, #yolo-tuning-controls, #face-detector-controls { 
             background: #333;
             padding: 10px;
             border-radius: 5px;
         }
-        #model-selector label, #yolo-tuning-controls label { /* ✨ Updated */
+        #model-selector label, #yolo-tuning-controls label, #face-detector-controls label {
             cursor: pointer;
             display: block;
             margin-bottom: 5px;
         }
-        #model-selector input[type="radio"] {
+        #model-selector input[type="radio"], #face-detector-controls input[type="radio"] {
             margin-right: 5px;
         }
         .slider-container { margin-bottom: 10px; }
         .slider-container input[type="range"] { width: 100%; cursor: pointer; }
         .slider-container .value-label { font-weight: bold; color: #4e9fff; }
+        
+        #retinaface-conf-container { display: none; } 
+        body.face-detector-accurate #retinaface-conf-container { display: block; } 
+
     </style>
 </head>
-<body>
-    <div class="container">
+<body class="face-detector-accurate"> <div class="container">
         <div class="video-container">
             <img id="video-feed" src="{{ url_for('video_feed') }}" width="640" height="480">
             <button id="action-button" class="start">Analyse Action</button>
@@ -112,7 +115,7 @@
         <div class="data-container">
             
             <div class="data-box">
-                <h2>⚡ YOLO Performance</h2>
+                <h2>⚡ YOLO Body Tracking</h2>
                 <div id="yolo-tuning-controls">
                     <div>
                         <input type="radio" id="yolo-n" name="yolo-model" value="n" checked>
@@ -127,15 +130,40 @@
                         <label for="yolo-m">Medium (Accurate)</label>
                     </div>
                     <hr style="border-color: #444; margin: 10px 0;">
-                    
                     <div class="slider-container">
                         <label for="yolo-conf-slider">Confidence: <span id="yolo-conf-value" class="value-label">40%</span></label>
                         <input type="range" id="yolo-conf-slider" min="0.15" max="0.85" value="0.4" step="0.05">
                     </div>
-
                     <div class="slider-container">
                         <label for="yolo-imgsz-slider">Image Size: <span id="yolo-imgsz-value" class="value-label">640px</span></label>
                         <input type="range" id="yolo-imgsz-slider" min="320" max="640" value="640" step="32">
+                    </div>
+                </div>
+            </div>
+
+            <div class="data-box">
+                <h2>👤 Face Recognition (DeepFace)</h2>
+                <div id="face-detector-controls">
+                    <div>
+                        <input type="radio" id="face-detector-accurate" name="face-detector-select" value="accurate" checked>
+                        <label for="face-detector-accurate">Accurate (RetinaFace)</label>
+                    </div>
+                    <div>
+                        <input type="radio" id="face-detector-fast" name="face-detector-select" value="fast">
+                        <label for="face-detector-fast">Fast (HOG)</label>
+                    </div>
+                    
+                    <hr style="border-color: #444; margin: 10px 0;">
+
+                    <div class="slider-container" id="recognition-threshold-container">
+                        <label for="recognition-threshold-slider">Recognition Threshold: <span id="recognition-threshold-value" class="value-label">0.40</span></label>
+                        <small>(Lower = Stricter, Fewer Mismatches)</small>
+                        <input type="range" id="recognition-threshold-slider" min="0.25" max="0.6" value="0.4" step="0.01" style="margin-top: 5px;">
+                    </div>
+                    
+                    <div class="slider-container" id="retinaface-conf-container">
+                        <label for="retina-conf-slider">RetinaFace Confidence: <span id="retina-conf-value" class="value-label">90%</span></label>
+                        <input type="range" id="retina-conf-slider" min="0.50" max="0.99" value="0.9" step="0.01">
                     </div>
                 </div>
             </div>
@@ -180,12 +208,21 @@
             const actionResultDiv = document.getElementById('action-result');
             const faceDataDiv = document.getElementById('face-data');
 
-            // ✨ --- NEW: YOLO Control Elements --- ✨
+            // YOLO Controls
             const yoloModelRadios = document.querySelectorAll('input[name="yolo-model"]');
             const yoloConfSlider = document.getElementById('yolo-conf-slider');
             const yoloConfValue = document.getElementById('yolo-conf-value');
             const yoloImgszSlider = document.getElementById('yolo-imgsz-slider');
             const yoloImgszValue = document.getElementById('yolo-imgsz-value');
+
+            // Face Detector Controls
+            const faceDetectorRadios = document.querySelectorAll('input[name="face-detector-select"]');
+            const retinaConfSlider = document.getElementById('retina-conf-slider');
+            const retinaConfValue = document.getElementById('retina-conf-value');
+            
+            // ✨ --- NEW: Recognition Threshold Slider --- ✨
+            const recognitionThresholdSlider = document.getElementById('recognition-threshold-slider');
+            const recognitionThresholdValue = document.getElementById('recognition-threshold-value');
 
             // 1. Handle Button Click
             actionButton.addEventListener('click', () => {
@@ -212,13 +249,11 @@
                 });
             });
 
-            // 3. ✨ --- NEW: Handle YOLO Tuning --- ✨
+            // 3. Handle YOLO Tuning
             function sendYoloSettings() {
                 const modelKey = document.querySelector('input[name="yolo-model"]:checked').value;
                 const conf = yoloConfSlider.value;
                 const imgsz = yoloImgszSlider.value;
-
-                console.log(`Sending YOLO settings: ${modelKey}, ${conf}, ${imgsz}`);
                 
                 fetch('/set_yolo_settings', {
                     method: 'POST',
@@ -231,13 +266,9 @@
                 })
                 .catch(error => console.error('Error setting YOLO settings:', error));
             }
-
-            // Add listeners for all YOLO controls
             yoloModelRadios.forEach(radio => radio.addEventListener('change', sendYoloSettings));
-            yoloConfSlider.addEventListener('change', sendYoloSettings); // On release
-            yoloImgszSlider.addEventListener('change', sendYoloSettings); // On release
-
-            // Update labels on input
+            yoloConfSlider.addEventListener('change', sendYoloSettings);
+            yoloImgszSlider.addEventListener('change', sendYoloSettings);
             yoloConfSlider.addEventListener('input', () => {
                 yoloConfValue.textContent = `${Math.round(yoloConfSlider.value * 100)}%`;
             });
@@ -245,22 +276,60 @@
                 yoloImgszValue.textContent = `${yoloImgszSlider.value}px`;
             });
 
+            // 4. Handle Face Detector Tuning
+            faceDetectorRadios.forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    const newDetector = e.target.value;
+                    console.log('Switching face detector to:', newDetector);
+                    document.body.className = "face-detector-" + newDetector; // Set class on body
+                    fetch('/set_face_detector', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ face_detector_mode: newDetector }),
+                    })
+                    .catch(error => console.error('Error setting face detector:', error));
+                });
+            });
 
-            // 4. Poll for Data Updates
+            // 5. Handle RetinaFace Tuning
+            retinaConfSlider.addEventListener('input', () => {
+                retinaConfValue.textContent = `${Math.round(retinaConfSlider.value * 100)}%`;
+            });
+            retinaConfSlider.addEventListener('change', () => {
+                fetch('/set_retinaface_tuning', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ retinaface_conf: retinaConfSlider.value }),
+                })
+                .catch(error => console.error('Error setting RetinaFace tuning:', error));
+            });
+            
+            // 6. ✨ --- NEW: Handle Recognition Threshold Tuning --- ✨
+            recognitionThresholdSlider.addEventListener('input', () => {
+                recognitionThresholdValue.textContent = parseFloat(recognitionThresholdSlider.value).toFixed(2);
+            });
+            recognitionThresholdSlider.addEventListener('change', () => {
+                fetch('/set_recognition_tuning', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ recognition_threshold: recognitionThresholdSlider.value }),
+                })
+                .catch(error => console.error('Error setting recognition tuning:', error));
+            });
+
+
+            // 7. Poll for Data Updates
             setInterval(updateData, 1000);
 
             function updateData() {
                 fetch('/get_data')
                     .then(response => response.json())
                     .then(data => {
-                        // Update button text and color
                         updateButton(data.is_recording, data.keyframe_count);
 
-                        // Update action analysis result
                         actionResultDiv.textContent = data.action_result || "Waiting for analysis...";
                         actionResultDiv.scrollTop = actionResultDiv.scrollHeight;
 
-                        // Update live face data
                         updateFaceData(data.live_faces);
 
                         // --- Sync UI based on server state ---
@@ -270,7 +339,7 @@
 
                         actionButton.disabled = (data.model === 'off');
                         
-                        // ✨ --- NEW: Sync YOLO controls --- ✨
+                        // Sync YOLO controls
                         const yoloModelRadio = document.querySelector(`input[name="yolo-model"][value="${data.yolo_model_key}"]`);
                         if (yoloModelRadio) yoloModelRadio.checked = true;
 
@@ -281,6 +350,24 @@
                         if (data.yolo_imgsz != yoloImgszSlider.value) {
                             yoloImgszSlider.value = data.yolo_imgsz;
                             yoloImgszValue.textContent = `${data.yolo_imgsz}px`;
+                        }
+                        
+                        // Sync Face Detector
+                        const faceDetectorRadio = document.querySelector(`input[name="face-detector-select"][value="${data.face_detector_mode}"]`);
+                        if (faceDetectorRadio) faceDetectorRadio.checked = true;
+                        
+                        document.body.className = "face-detector-" + data.face_detector_mode;
+
+                        // Sync RetinaFace Slider
+                        if (data.retinaface_conf != retinaConfSlider.value) {
+                            retinaConfSlider.value = data.retinaface_conf;
+                            retinaConfValue.textContent = `${Math.round(data.retinaface_conf * 100)}%`;
+                        }
+                        
+                        // ✨ --- NEW: Sync Recognition Threshold Slider --- ✨
+                        if (data.recognition_threshold != recognitionThresholdSlider.value) {
+                            recognitionThresholdSlider.value = data.recognition_threshold;
+                            recognitionThresholdValue.textContent = parseFloat(data.recognition_threshold).toFixed(2);
                         }
                     })
                     .catch(error => console.error('Error fetching data:', error));
@@ -313,8 +400,14 @@
                         analysisText = "<i>(Awaiting identification)</i>";
                     }
 
+                    // ✨ --- FIXED: Show confidence again --- ✨
+                    let confidenceText = face.confidence > 0 ? ` (${Math.round(face.confidence)}%)` : '';
+                    if (face.name === 'Person') {
+                        confidenceText = ''; // Don't show confidence for "Person"
+                    }
+
                     faceEl.innerHTML = `
-                        <strong>${face.name} ${face.confidence > 0 ? `(${face.confidence}%)` : ''}</strong>
+                        <strong>${face.name}${confidenceText}</strong>
                         <div>${analysisText}</div>
                     `;
                     faceDataDiv.appendChild(faceEl);
