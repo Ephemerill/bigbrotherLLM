@@ -471,18 +471,23 @@ def video_processing_thread():
                             confidence = max(0, min(100, (1.0 - (min_distance / MAX_RECOGNITION_DISTANCE)) * 100))
                     # --- END SOTA-AWARE DISTANCE ---
 
-                # --- STEP D: ASSOCIATE & ANALYZE ---
+                # --- STEP D: ASSOCIATE & ANALYZE (*** MODIFIED LOGIC ***) ---
+                
+                # 3. Association Logic (Common for all faces)
+                body_track_id = get_containing_body_box(face_location, body_boxes_with_ids)
+
+                # If this face doesn't belong to a detected body, we can't associate it.
+                if body_track_id is None:
+                    continue # Skip to the next face_location
+
                 if name != "Unknown":
-                    # 3. Association Logic
-                    body_track_id = get_containing_body_box(face_location, body_boxes_with_ids)
-                    if body_track_id is not None:
-                        # 4. "Remember" the Name and Face Location
-                        print(f"[Registry] Associated {name} ({SOTA_MODEL}) with Person ID {body_track_id}")
-                        person_registry[body_track_id] = {
-                            "name": name, 
-                            "confidence": confidence, 
-                            "face_location": face_location 
-                        }
+                    # 4. "Remember" the Name and Face Location for KNOWN faces
+                    print(f"[Registry] Associated {name} ({SOTA_MODEL}) with Person ID {body_track_id}")
+                    person_registry[body_track_id] = {
+                        "name": name, 
+                        "confidence": confidence, 
+                        "face_location": face_location 
+                    }
                     
                     # 5. Trigger single-frame analysis
                     current_time = time.time()
@@ -493,6 +498,21 @@ def video_processing_thread():
                         print(f"\nTriggering single-frame analysis for {name}...") 
                         analysis_thread = threading.Thread(target=analyze_frame_with_gemma, args=(frame.copy(), name), daemon=True)
                         analysis_thread.start()
+                
+                else: # This is an UNKNOWN face
+                    # 4. "Remember" the Face Location for UNKNOWN faces
+                    # We only want to do this if the person is not already known.
+                    # This prevents a known person's face box from disappearing
+                    # if the recognizer fails for one frame.
+                    if person_registry.get(body_track_id, {}).get("name", "Person") == "Person":
+                        person_registry[body_track_id] = {
+                            "name": "Person", # Use "Person" to match the default
+                            "confidence": 0, 
+                            "face_location": face_location 
+                        }
+                    # If the person *is* known, we just let the existing registry entry
+                    # (with the correct name) persist. We don't save this "unknown"
+                    # location, allowing the last known-good face_location to be used.
 
         # 6. Drawing & Data Sync (Every Frame)
         live_face_payload = []

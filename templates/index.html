@@ -85,12 +85,12 @@
             border-bottom: 1px solid #444;
         }
         .face-item strong { color: #4e9fff; }
-        #model-selector, #yolo-tuning-controls, #face-detector-controls, #recognition-tuning-controls { /* ✨ Updated */
+        #model-selector, #yolo-tuning-controls, #face-detector-controls, #recognition-tuning-controls {
             background: #333;
             padding: 10px;
             border-radius: 5px;
         }
-        #model-selector label, #yolo-tuning-controls label, #face-detector-controls label, #recognition-tuning-controls label { /* ✨ Updated */
+        #model-selector label, #yolo-tuning-controls label, #face-detector-controls label, #recognition-tuning-controls label {
             cursor: pointer;
             display: block;
             margin-bottom: 5px;
@@ -102,8 +102,8 @@
         .slider-container input[type="range"] { width: 100%; cursor: pointer; }
         .slider-container .value-label { font-weight: bold; color: #4e9fff; }
         
-        #retinaface-conf-container { display: none; } /* ✨ Renamed */
-        body.face-detector-accurate #retinaface-conf-container { display: block; } /* ✨ Renamed */
+        #retinaface-conf-container { display: none; }
+        body.face-detector-accurate #retinaface-conf-container { display: block; }
 
     </style>
 </head>
@@ -128,6 +128,10 @@
                     <div>
                         <input type="radio" id="yolo-m" name="yolo-model" value="m">
                         <label for="yolo-m">Medium (Accurate)</label>
+                    </div>
+                    <div>
+                        <input type="radio" id="yolo-x" name="yolo-model" value="x">
+                        <label for="yolo-x">Ultra (Slowest/Max Accuracy)</label>
                     </div>
                     <hr style="border-color: #444; margin: 10px 0;">
                     <div class="slider-container">
@@ -220,7 +224,6 @@
             const retinaConfSlider = document.getElementById('retina-conf-slider');
             const retinaConfValue = document.getElementById('retina-conf-value');
             
-            // ✨ --- NEW: Recognition Threshold Slider --- ✨
             const recognitionThresholdSlider = document.getElementById('recognition-threshold-slider');
             const recognitionThresholdValue = document.getElementById('recognition-threshold-value');
 
@@ -304,7 +307,7 @@
                 .catch(error => console.error('Error setting RetinaFace tuning:', error));
             });
             
-            // 6. ✨ --- NEW: Handle Recognition Threshold Tuning --- ✨
+            // 6. Handle Recognition Threshold Tuning
             recognitionThresholdSlider.addEventListener('input', () => {
                 recognitionThresholdValue.textContent = parseFloat(recognitionThresholdSlider.value).toFixed(2);
             });
@@ -364,7 +367,7 @@
                             retinaConfValue.textContent = `${Math.round(data.retinaface_conf * 100)}%`;
                         }
                         
-                        // ✨ --- NEW: Sync Recognition Threshold Slider --- ✨
+                        // Sync Recognition Threshold Slider
                         if (data.recognition_threshold != recognitionThresholdSlider.value) {
                             recognitionThresholdSlider.value = data.recognition_threshold;
                             recognitionThresholdValue.textContent = parseFloat(data.recognition_threshold).toFixed(2);
