@@ -1,7 +1,11 @@
 flask
+opencv-python
+numpy
 ollama
-retina-face
-face_recognition
 ultralytics
-setuptools
 deepface
+retina-face
+face-recognition
+gfpgan
+torch
+torchvision

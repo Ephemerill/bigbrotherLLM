@@ -18,6 +18,11 @@ source venv/bin/activate
 run the following command in the venv to install the dependancies
 pip install -r requirements.txt
 
+run the following command 
+```
+pip install git+https://github.com/XPixelGroup/BasicSR.git
+```
+
 While in the venv, run the command
 
 python3 app.py 
