@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemma / LLaVA / Moondream Vision Server</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 20px;
+            gap: 20px;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+        .video-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #252526;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        #video-feed {
+            width: 640px;
+            height: 480px;
+            border-radius: 4px;
+            background-color: #000;
+        }
+        #action-button {
+            width: 100%;
+            padding: 15px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 4px;
+            margin-top: 20px;
+            cursor: pointer;
+            transition: background-color 0.2s ease, opacity 0.2s ease;
+        }
+        #action-button.start { background-color: #28a745; color: white; }
+        #action-button.stop { background-color: #dc3545; color: white; }
+        #action-button:disabled {
+            background-color: #5a5a5a;
+            color: #999;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        .data-container {
+            width: 400px;
+            background: #252526;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .data-box {
+            margin-bottom: 20px;
+        }
+        .data-box h2 {
+            border-bottom: 2px solid #444;
+            padding-bottom: 5px;
+            margin-top: 0;
+        }
+        #action-result {
+            font-style: italic;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+            background: #1e1e1e;
+            border: 1px solid #444;
+            padding: 5px;
+        }
+        .face-item {
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #444;
+        }
+        .face-item strong { color: #4e9fff; }
+        #model-selector, #yolo-tuning-controls, #face-detector-controls, #recognition-tuning-controls {
+            background: #333;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #model-selector label, #yolo-tuning-controls label, #face-detector-controls label, #recognition-tuning-controls label {
+            cursor: pointer;
+            display: block;
+            margin-bottom: 5px;
+        }
+        #model-selector input[type="radio"], #face-detector-controls input[type="radio"] {
+            margin-right: 5px;
+        }
+        .slider-container { margin-bottom: 10px; }
+        .slider-container input[type="range"] { width: 100%; cursor: pointer; }
+        .slider-container .value-label { font-weight: bold; color: #4e9fff; }
+        
+        #retinaface-conf-container { display: none; }
+        body.face-detector-accurate #retinaface-conf-container { display: block; }
+
+    </style>
+</head>
+<body class="face-detector-accurate"> <div class="container">
+        <div class="video-container">
+            <img id="video-feed" src="{{ url_for('video_feed') }}" width="640" height="480">
+            <button id="action-button" class="start">Analyse Action</button>
+        </div>
+        <div class="data-container">
+            
+            <div class="data-box">
+                <h2>⚡ YOLO Body Tracking</h2>
+                <div id="yolo-tuning-controls">
+                    <div>
+                        <input type="radio" id="yolo-n" name="yolo-model" value="n" checked>
+                        <label for="yolo-n">Nano (Fastest)</label>
+                    </div>
+                    <div>
+                        <input type="radio" id="yolo-s" name="yolo-model" value="s">
+                        <label for="yolo-s">Small (Balanced)</label>
+                    </div>
+                    <div>
+                        <input type="radio" id="yolo-m" name="yolo-model" value="m">
+                        <label for="yolo-m">Medium (Accurate)</label>
+                    </div>
+                    <div>
+                        <input type="radio" id="yolo-x" name="yolo-model" value="x">
+                        <label for="yolo-x">Ultra (Slowest/Max Accuracy)</label>
+                    </div>
+                    <hr style="border-color: #444; margin: 10px 0;">
+                    <div class="slider-container">
+                        <label for="yolo-conf-slider">Confidence: <span id="yolo-conf-value" class="value-label">40%</span></label>
+                        <input type="range" id="yolo-conf-slider" min="0.15" max="0.85" value="0.4" step="0.05">
+                    </div>
+                    <div class="slider-container">
+                        <label for="yolo-imgsz-slider">Image Size: <span id="yolo-imgsz-value" class="value-label">640px</span></label>
+                        <input type="range" id="yolo-imgsz-slider" min="320" max="640" value="640" step="32">
+                    </div>
+                </div>
+            </div>
+
+            <div class="data-box">
+                <h2>👤 Face Recognition</h2>
+                <div id="face-detector-controls">
+                    <div>
+                        <input type="radio" id="face-detector-accurate" name="face-detector-select" value="accurate" checked>
+                        <label for="face-detector-accurate">Accurate (RetinaFace)</label>
+                    </div>
+                    <div>
+                        <input type="radio" id="face-detector-fast" name="face-detector-select" value="fast">
+                        <label for="face-detector-fast">Fast (HOG)</label>
+                    </div>
+                    
+                    <hr style="border-color: #444; margin: 10px 0;">
+
+                    <div class="slider-container" id="recognition-threshold-container">
+                        <label for="recognition-threshold-slider">Recognition Threshold: <span id="recognition-threshold-value" class="value-label">0.60</span></label>
+                        <small>(Lower = Stricter, Fewer Mismatches)</small>
+                        <input type="range" id="recognition-threshold-slider" min="0.4" max="0.7" value="0.6" step="0.01" style="margin-top: 5px;">
+                    </div>
+                    
+                    <div class="slider-container" id="retinaface-conf-container">
+                        <label for="retina-conf-slider">RetinaFace Confidence: <span id="retina-conf-value" class="value-label">90%</span></label>
+                        <input type="range" id="retina-conf-slider" min="0.50" max="0.99" value="0.9" step="0.01">
+                    </div>
+                </div>
+            </div>
+
+            <div class="data-box">
+                <h2>🤖 AI Model</h2>
+                <div id="model-selector">
+                    <div>
+                        <input type="radio" id="model-gemma" name="model-select" value="gemma3:4b" checked>
+                        <label for="model-gemma">Gemma 3 (Balanced)</label>
+                    </div>
+                    <div>
+                        <input type="radio" id="model-llava" name="model-select" value="llava">
+                        <label for="model-llava">LLaVA (General)</label>
+                    </div>
+                    <div>
+                        <input type="radio" id="model-moondream" name="model-select" value="moondream">
+                        <label for="model-moondream">Moondream (Fastest)</label>
+                    </div>
+                    <div>
+                        <input type="radio" id="model-off" name="model-select" value="off">
+                        <label for="model-off">Off (Detection Only)</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="data-box">
+                <h2>🔳 Action Analysis</h2>
+                <div id="action-result">Waiting for analysis...</div>
+            </div>
+            <div class="data-box">
+                <h2>👤 Live Person Analysis</h2>
+                <div id="face-data">No persons detected.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            const actionButton = document.getElementById('action-button');
+            const actionResultDiv = document.getElementById('action-result');
+            const faceDataDiv = document.getElementById('face-data');
+
+            // YOLO Controls
+            const yoloModelRadios = document.querySelectorAll('input[name="yolo-model"]');
+            const yoloConfSlider = document.getElementById('yolo-conf-slider');
+            const yoloConfValue = document.getElementById('yolo-conf-value');
+            const yoloImgszSlider = document.getElementById('yolo-imgsz-slider');
+            const yoloImgszValue = document.getElementById('yolo-imgsz-value');
+
+            // Face Detector Controls
+            const faceDetectorRadios = document.querySelectorAll('input[name="face-detector-select"]');
+            const retinaConfSlider = document.getElementById('retina-conf-slider');
+            const retinaConfValue = document.getElementById('retina-conf-value');
+            
+            const recognitionThresholdSlider = document.getElementById('recognition-threshold-slider');
+            const recognitionThresholdValue = document.getElementById('recognition-threshold-value');
+
+            // 1. Handle Button Click
+            actionButton.addEventListener('click', () => {
+                fetch('/toggle_action', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        updateButton(data.is_recording, 0);
+                    })
+                    .catch(error => console.error('Error toggling action:', error));
+            });
+
+            // 2. Handle AI Model Selection
+            document.querySelectorAll('input[name="model-select"]').forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    const newModel = e.target.value;
+                    console.log('Switching AI model to:', newModel);
+                    actionButton.disabled = (newModel === 'off');
+                    fetch('/set_model', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ model: newModel }),
+                    })
+                    .catch(error => console.error('Error setting model:', error));
+                });
+            });
+
+            // 3. Handle YOLO Tuning
+            function sendYoloSettings() {
+                const modelKey = document.querySelector('input[name="yolo-model"]:checked').value;
+                const conf = yoloConfSlider.value;
+                const imgsz = yoloImgszSlider.value;
+                
+                fetch('/set_yolo_settings', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        yolo_model_key: modelKey,
+                        yolo_conf: conf,
+                        yolo_imgsz: imgsz
+                    }),
+                })
+                .catch(error => console.error('Error setting YOLO settings:', error));
+            }
+            yoloModelRadios.forEach(radio => radio.addEventListener('change', sendYoloSettings));
+            yoloConfSlider.addEventListener('change', sendYoloSettings);
+            yoloImgszSlider.addEventListener('change', sendYoloSettings);
+            yoloConfSlider.addEventListener('input', () => {
+                yoloConfValue.textContent = `${Math.round(yoloConfSlider.value * 100)}%`;
+            });
+            yoloImgszSlider.addEventListener('input', () => {
+                yoloImgszValue.textContent = `${yoloImgszSlider.value}px`;
+            });
+
+            // 4. Handle Face Detector Tuning
+            faceDetectorRadios.forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    const newDetector = e.target.value;
+                    console.log('Switching face detector to:', newDetector);
+                    document.body.className = "face-detector-" + newDetector; // Set class on body
+                    fetch('/set_face_detector', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ face_detector_mode: newDetector }),
+                    })
+                    .catch(error => console.error('Error setting face detector:', error));
+                });
+            });
+
+            // 5. Handle RetinaFace Tuning
+            retinaConfSlider.addEventListener('input', () => {
+                retinaConfValue.textContent = `${Math.round(retinaConfSlider.value * 100)}%`;
+            });
+            retinaConfSlider.addEventListener('change', () => {
+                fetch('/set_retinaface_tuning', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ retinaface_conf: retinaConfSlider.value }),
+                })
+                .catch(error => console.error('Error setting RetinaFace tuning:', error));
+            });
+            
+            // 6. Handle Recognition Threshold Tuning
+            recognitionThresholdSlider.addEventListener('input', () => {
+                recognitionThresholdValue.textContent = parseFloat(recognitionThresholdSlider.value).toFixed(2);
+            });
+            recognitionThresholdSlider.addEventListener('change', () => {
+                fetch('/set_recognition_tuning', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ recognition_threshold: recognitionThresholdSlider.value }),
+                })
+                .catch(error => console.error('Error setting recognition tuning:', error));
+            });
+
+
+            // 7. Poll for Data Updates
+            setInterval(updateData, 1000);
+
+            function updateData() {
+                fetch('/get_data')
+                    .then(response => response.json())
+                    .then(data => {
+                        updateButton(data.is_recording, data.keyframe_count);
+
+                        actionResultDiv.textContent = data.action_result || "Waiting for analysis...";
+                        actionResultDiv.scrollTop = actionResultDiv.scrollHeight;
+
+                        updateFaceData(data.live_faces);
+
+                        // --- Sync UI based on server state ---
+                        
+                        const modelRadio = document.querySelector(`input[name="model-select"][value="${data.model}"]`);
+                        if (modelRadio) modelRadio.checked = true;
+
+                        actionButton.disabled = (data.model === 'off');
+                        
+                        // Sync YOLO controls
+                        const yoloModelRadio = document.querySelector(`input[name="yolo-model"][value="${data.yolo_model_key}"]`);
+                        if (yoloModelRadio) yoloModelRadio.checked = true;
+
+                        if (data.yolo_conf != yoloConfSlider.value) {
+                            yoloConfSlider.value = data.yolo_conf;
+                            yoloConfValue.textContent = `${Math.round(data.yolo_conf * 100)}%`;
+                        }
+                        if (data.yolo_imgsz != yoloImgszSlider.value) {
+                            yoloImgszSlider.value = data.yolo_imgsz;
+                            yoloImgszValue.textContent = `${data.yolo_imgsz}px`;
+                        }
+                        
+                        // Sync Face Detector
+                        const faceDetectorRadio = document.querySelector(`input[name="face-detector-select"][value="${data.face_detector_mode}"]`);
+                        if (faceDetectorRadio) faceDetectorRadio.checked = true;
+                        
+                        document.body.className = "face-detector-" + data.face_detector_mode;
+
+                        // Sync RetinaFace Slider
+                        if (data.retinaface_conf != retinaConfSlider.value) {
+                            retinaConfSlider.value = data.retinaface_conf;
+                            retinaConfValue.textContent = `${Math.round(data.retinaface_conf * 100)}%`;
+                        }
+                        
+                        // Sync Recognition Threshold Slider
+                        if (data.recognition_threshold != recognitionThresholdSlider.value) {
+                            recognitionThresholdSlider.value = data.recognition_threshold;
+                            recognitionThresholdValue.textContent = parseFloat(data.recognition_threshold).toFixed(2);
+                        }
+                    })
+                    .catch(error => console.error('Error fetching data:', error));
+            }
+
+            function updateButton(isRecording, keyframe_count) {
+                if (isRecording) {
+                    actionButton.textContent = `STOP Recording (Keyframes: ${keyframe_count})`;
+                    actionButton.className = 'stop';
+                } else {
+                    actionButton.textContent = 'Analyse Action';
+                    actionButton.className = 'start';
+                }
+            }
+
+            function updateFaceData(faces) {
+                if (!faces || faces.length === 0) {
+                    faceDataDiv.textContent = 'No persons detected.';
+                    return;
+                }
+
+                faceDataDiv.innerHTML = '';
+
+                faces.forEach(face => {
+                    const faceEl = document.createElement('div');
+                    faceEl.className = 'face-item';
+                    
+                    let analysisText = face.analysis ? face.analysis : "<i>(Waiting...)</i>";
+                    if (face.name === 'Person') {
+                        analysisText = "<i>(Awaiting identification)</i>";
+                    }
+
+                    faceEl.innerHTML = `
+                        <strong>${face.name} ${face.confidence > 0 ? `(${face.confidence}%)` : ''}</strong>
+                        <div>${analysisText}</div>
+                    `;
+                    faceDataDiv.appendChild(faceEl);
+                });
+            }
+
+            // Initial call to get data right away
+            updateData();
+        });
+    </script>
+</body>
+</html>
