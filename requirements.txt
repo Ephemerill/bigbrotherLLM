@@ -4,3 +4,4 @@ retina-face
 face_recognition
 ultralytics
 setuptools
+deepface

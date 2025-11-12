@@ -105,6 +105,57 @@
         #retinaface-conf-container { display: none; }
         body.face-detector-accurate #retinaface-conf-container { display: block; }
 
+        /* Toggle Switch Style */
+        .toggle-container { margin-bottom: 15px; }
+        .toggle-container label {
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between; 
+            cursor: pointer;
+        }
+        .toggle-container input[type="checkbox"] {
+            appearance: none;
+            width: 40px;
+            height: 20px;
+            background: #555;
+            border-radius: 10px;
+            position: relative;
+            cursor: pointer;
+            outline: none;
+            transition: background-color 0.2s;
+        }
+        .toggle-container input[type="checkbox"]::before {
+            content: '';
+            width: 16px;
+            height: 16px;
+            background: #fff;
+            border-radius: 50%;
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.2s;
+        }
+        .toggle-container input[type="checkbox"]:checked {
+            background: #4e9fff;
+        }
+        .toggle-container input[type="checkbox"]:checked::before {
+            transform: translateX(20px);
+        }
+        /* Style for disabled toggle */
+        .toggle-container input[type="checkbox"]:disabled {
+            background: #444;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        .toggle-container input[type="checkbox"]:disabled::before {
+            background: #888;
+        }
+        .toggle-container.disabled span {
+            color: #888;
+            cursor: not-allowed;
+        }
+
+
     </style>
 </head>
 <body class="face-detector-accurate"> <div class="container">
@@ -159,6 +210,21 @@
                     
                     <hr style="border-color: #444; margin: 10px 0;">
 
+                    <div class="toggle-container">
+                        <label for="face-alignment-toggle">
+                            <span>High-Accuracy Alignment</span>
+                            <input type="checkbox" id="face-alignment-toggle" checked>
+                        </label>
+                        <small style="display: block; margin-top: 4px;">(Slower, but much more accurate matching)</small>
+                    </div>
+                    
+                    <div class="toggle-container" id="face-enhancement-container">
+                        <label for="face-enhancement-toggle">
+                            <span>Enhance Distant Faces (GFPGAN)</span>
+                            <input type="checkbox" id="face-enhancement-toggle">
+                        </label>
+                        <small style="display: block; margin-top: 4px;">(MUCH slower, helps match blurry faces)</small>
+                    </div>
                     <div class="slider-container" id="recognition-threshold-container">
                         <label for="recognition-threshold-slider">Recognition Threshold: <span id="recognition-threshold-value" class="value-label">0.60</span></label>
                         <small>(Lower = Stricter, Fewer Mismatches)</small>
@@ -223,9 +289,13 @@
             const faceDetectorRadios = document.querySelectorAll('input[name="face-detector-select"]');
             const retinaConfSlider = document.getElementById('retina-conf-slider');
             const retinaConfValue = document.getElementById('retina-conf-value');
-            
             const recognitionThresholdSlider = document.getElementById('recognition-threshold-slider');
             const recognitionThresholdValue = document.getElementById('recognition-threshold-value');
+            const faceAlignmentToggle = document.getElementById('face-alignment-toggle');
+            
+            // ✨ New Enhancement Toggle
+            const faceEnhancementToggle = document.getElementById('face-enhancement-toggle');
+            const faceEnhancementContainer = document.getElementById('face-enhancement-container');
 
             // 1. Handle Button Click
             actionButton.addEventListener('click', () => {
@@ -284,7 +354,7 @@
                 radio.addEventListener('change', (e) => {
                     const newDetector = e.target.value;
                     console.log('Switching face detector to:', newDetector);
-                    document.body.className = "face-detector-" + newDetector; // Set class on body
+                    document.body.className = "face-detector-" + newDetector; 
                     fetch('/set_face_detector', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
@@ -320,8 +390,32 @@
                 .catch(error => console.error('Error setting recognition tuning:', error));
             });
 
+            // 7. Handle Face Alignment Toggle
+            faceAlignmentToggle.addEventListener('change', () => {
+                const isAccurate = faceAlignmentToggle.checked;
+                console.log('Setting high-accuracy alignment to:', isAccurate);
+                fetch('/set_face_alignment', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ alignment_mode: isAccurate ? 'accurate' : 'fast' }),
+                })
+                .catch(error => console.error('Error setting face alignment:', error));
+            });
+            
+            // ✨ 8. Handle Face Enhancement Toggle
+            faceEnhancementToggle.addEventListener('change', () => {
+                const isEnhanced = faceEnhancementToggle.checked;
+                console.log('Setting face enhancement to:', isEnhanced);
+                fetch('/set_face_enhancement', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ enhancement_mode: isEnhanced ? 'on' : 'off' }),
+                })
+                .catch(error => console.error('Error setting face enhancement:', error));
+            });
 
-            // 7. Poll for Data Updates
+
+            // 9. Poll for Data Updates (was 7)
             setInterval(updateData, 1000);
 
             function updateData() {
@@ -334,15 +428,13 @@
                         actionResultDiv.scrollTop = actionResultDiv.scrollHeight;
 
                         updateFaceData(data.live_faces);
-
+                        
                         // --- Sync UI based on server state ---
                         
                         const modelRadio = document.querySelector(`input[name="model-select"][value="${data.model}"]`);
                         if (modelRadio) modelRadio.checked = true;
-
                         actionButton.disabled = (data.model === 'off');
                         
-                        // Sync YOLO controls
                         const yoloModelRadio = document.querySelector(`input[name="yolo-model"][value="${data.yolo_model_key}"]`);
                         if (yoloModelRadio) yoloModelRadio.checked = true;
 
@@ -355,23 +447,37 @@
                             yoloImgszValue.textContent = `${data.yolo_imgsz}px`;
                         }
                         
-                        // Sync Face Detector
                         const faceDetectorRadio = document.querySelector(`input[name="face-detector-select"][value="${data.face_detector_mode}"]`);
                         if (faceDetectorRadio) faceDetectorRadio.checked = true;
-                        
                         document.body.className = "face-detector-" + data.face_detector_mode;
 
-                        // Sync RetinaFace Slider
                         if (data.retinaface_conf != retinaConfSlider.value) {
                             retinaConfSlider.value = data.retinaface_conf;
                             retinaConfValue.textContent = `${Math.round(data.retinaface_conf * 100)}%`;
                         }
                         
-                        // Sync Recognition Threshold Slider
                         if (data.recognition_threshold != recognitionThresholdSlider.value) {
                             recognitionThresholdSlider.value = data.recognition_threshold;
                             recognitionThresholdValue.textContent = parseFloat(data.recognition_threshold).toFixed(2);
                         }
+                        
+                        const serverAlignmentMode = data.face_alignment_mode === 'accurate';
+                        if (serverAlignmentMode !== faceAlignmentToggle.checked) {
+                            faceAlignmentToggle.checked = serverAlignmentMode;
+                        }
+                        
+                        // ✨ Sync Face Enhancement Toggle
+                        const serverEnhancementMode = data.face_enhancement_mode === 'on';
+                        if (serverEnhancementMode !== faceEnhancementToggle.checked) {
+                            faceEnhancementToggle.checked = serverEnhancementMode;
+                        }
+                        // Disable toggle if GFPGAN is not available (e.g., failed import)
+                        if (serverEnhancementMode === 'off' && data.face_enhancement_mode === 'off_disabled') {
+                             faceEnhancementToggle.checked = false;
+                             faceEnhancementToggle.disabled = true;
+                             faceEnhancementContainer.classList.add('disabled');
+                        }
+
                     })
                     .catch(error => console.error('Error fetching data:', error));
             }
@@ -383,6 +489,7 @@
                 } else {
                     actionButton.textContent = 'Analyse Action';
                     actionButton.className = 'start';
+
                 }
             }
 
